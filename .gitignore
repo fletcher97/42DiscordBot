@@ -6,3 +6,4 @@
 **.pyc
 moulinette/
 cogs/resources/*.json
+venv/
