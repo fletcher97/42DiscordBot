@@ -145,5 +145,5 @@ class Rosters(commands.Cog):
 					res_string += f"and {self.rosters_dict[activity][number_of_players - 1]}."
 				return (res_string)
 
-def setup(client):
-	client.add_cog(Rosters(client))
+async def setup(client):
+	await client.add_cog(Rosters(client))

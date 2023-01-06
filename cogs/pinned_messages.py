@@ -23,5 +23,5 @@ class Pinned(commands.Cog):
 					await message.pin()
 
 
-def setup(client):
-	client.add_cog(Pinned(client))
+async def setup(client):
+	await client.add_cog(Pinned(client))

@@ -9,10 +9,15 @@ import os.path
 import json
 
 # Switch between prod and dev branches
-from bot import ids
+import os
+if os.getenv('ENV') == 'PROD':
+	import ids_prod as ids
+else:
+	import ids_dev as ids
+
 
 def get_database(path_to_database):
-    json_file = open(path_to_database) 
+    json_file = open(path_to_database)
     loaded_dict = json.load(json_file)
     json_file.close()
     return loaded_dict
@@ -23,6 +28,7 @@ class AssignsRole(commands.Cog):
 
     @commands.command()
     async def attribute_42student(self, ctx):
+        print('attribute_42student')
         logging.info("Deploying attribution of 42student role ⚙️ ")
         if ids.staff in [x.id for x in ctx.author.roles]:
             if not os.path.exists('./users_id_database.json'):
@@ -36,5 +42,5 @@ class AssignsRole(commands.Cog):
                     snowflake = discord.Object(ids.student42)
                     await user.add_roles(snowflake)
 
-def setup(client):
-    client.add_cog(AssignsRole(client))
+async def setup(client):
+    await client.add_cog(AssignsRole(client))

@@ -3,14 +3,55 @@
 # - Ids the user
 # - Gives the user its role (piscineux or 42student, one of the houses)
 
-import discord
-import requests
-import time
 import datetime
-from discord.ext import commands
-import text_messages as tm
-from bot import ids
+import logging
+import os
+import time
 
+import discord
+import dropi
+import requests
+from discord.ext import commands
+import traceback
+
+import text_messages as tm
+
+if os.getenv('ENV') == 'PROD':
+	import ids_prod as ids
+else:
+	import ids_dev as ids
+
+from dotenv import load_dotenv
+
+# Temp fix for user kinit
+load_dotenv()
+payload = {
+        "grant_type": "client_credentials",
+        "client_id": os.environ.get("UID_ID"),
+        "client_secret": os.environ.get("SECRET"),
+        "scope": "public"
+}
+
+api_url = "https://api.intra.42.fr/"
+token_endpoint = "oauth/token"
+autho = ""
+headers = {}
+
+def token_handler():
+    global autho
+    global headers
+    token_result = requests.post(api_url + token_endpoint, params=payload)
+    try:
+        print(token_result)
+        token = token_result.json()['access_token']
+        logging.info("Successfully obtained access token.")
+    except KeyError:
+        print("failed to get access token")
+        return
+    autho = f"{token_result.json()['token_type']} {token}"
+    headers = {
+        'Authorization': autho
+    }
 
 # If houses also has the visitor, it's to not over-complicate the remove on_raw_reaction_remove function
 
@@ -48,6 +89,7 @@ async def add_reactions_to_message(message, reactions):
 
 class Welcome(commands.Cog):
 	def __init__(self, client):
+		self.api = dropi.Api42()
 		self.client = client
 
 	async def make_welcome_message(self, channel):
@@ -107,36 +149,48 @@ class Welcome(commands.Cog):
 	# The output from the moulinette goes away after a few seconds
 	@commands.command()
 	async def kinit(self, ctx, login="404"):
+		print(type(ctx))
+		print('kinit')
 		await ctx.message.delete()
-		possible_extensions = ['jpg', 'png']
-		for ext in possible_extensions:
-			url = f'https://cdn.intra.42.fr/users/{login}.{ext}'
-			if requests.get(url).status_code == 200:
-				print(f"kinit by {login} successful!")
-				# Removing the visitor role (even if he doesn't have it)
-				# Creating the attribute guild to self.client. Here guild is the server
-				self.client.guild = self.client.get_guild(ids.server)
-				role = self.client.guild.get_role(ids.visitor)
-				member = self.client.guild.get_member(ctx.message.author.id)
-				await member.remove_roles(role)
-				# Checking if user already has 42student role. If so, don't add piscineux role
-				for role in member.roles:
-					if role.id == ids.student:
-						msg = await ctx.send(f"<@!{ctx.author.id}>: Already 42 student. Login unnecessary")
-						time.sleep(3)
-						await msg.delete()
-						return
-				# Adding the piscineux role, if he does not have the student role
-				role = discord.utils.get(ctx.author.guild.roles, id=ids.piscineux)
-				await ctx.message.author.edit(nick=login)
-				await ctx.message.author.add_roles(role)
-				msg = await ctx.send(f"<@!{ctx.author.id}>: {ids.success_kid_emoji}")
-				time.sleep(3)
-				await msg.delete()
-				return
-		msg = await ctx.send(f"<@!{ctx.author.id}>: Login not valid")
-		time.sleep(3)
-		await msg.delete()
+		# possible_extensions = ['jpg', 'png']
+		print(login)
+		try:
+			a = self.api.get(f"users/{login}")
+			print('success')
+			print(f"kinit by {login} successful!")
+			# Removing the visitor role (even if he doesn't have it)
+			# Creating the attribute guild to self.client. Here guild is the server
+			self.client.guild = self.client.get_guild(ids.server)
+			role = self.client.guild.get_role(ids.visitor)
+			member = self.client.guild.get_member(ctx.message.author.id)
+			await member.remove_roles(role)
+			print('role check')
+			# Checking if user already has 42student role. If so, don't add piscineux role
+			for r in member.roles:
+				if r.id == ids.student:
+					msg = await ctx.send(f"<@!{ctx.author.id}>: Already 42 student. Login unnecessary")
+					time.sleep(3)
+					await msg.delete()
+					return
+			print('done check')
+			# Adding the piscineux role, if he does not have the student role
+			role = discord.utils.get(ctx.author.guild.roles, id=ids.student42)
+			print('got role')
+			await member.edit(nick=login)
+			print('changed nick')
+			await member.add_roles(role)
+			print('added role')
+			msg = await ctx.send(f"<@!{ctx.author.id}>: {ids.success_kid_emoji}")
+			print('sent msg')
+			time.sleep(3)
+			await msg.delete()
+		except:
+			traceback.print_exc()
+			print('failed get')
+			msg = await ctx.send(f"<@!{ctx.author.id}>: Login not valid")
+			time.sleep(3)
+			await msg.delete()
+
 
 	# Adding the role to the user based on the reaction house in clicks on
 	# Removing the role "Check Rules" to the user who react to the rules message
@@ -206,8 +260,10 @@ class Welcome(commands.Cog):
 		if message.author == self.client.user:
 			return
 		elif message.channel.id == ids.welcome and not (message.content.startswith('.kinit') or message.content.startswith('.piscine')):
+			print(f'---{message}---')
+			print(f'---{message.content}---')
 			await message.channel.purge(limit=1)
 			return
 
-def setup(client):
-	client.add_cog(Welcome(client))
+async def setup(client):
+	await client.add_cog(Welcome(client))

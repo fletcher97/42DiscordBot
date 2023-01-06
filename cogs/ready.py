@@ -23,5 +23,5 @@ class Ready(commands.Cog):
 	async def change_status(self):
 		await self.client.change_presence(activity=discord.Game(next(status)))
 
-def setup(client):
-	client.add_cog(Ready(client))
+async def setup(client):
+	await client.add_cog(Ready(client))
